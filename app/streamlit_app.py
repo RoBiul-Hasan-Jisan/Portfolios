@@ -1,11 +1,11 @@
 import streamlit as st
-from transformers import GPT2Tokenizer, GPT2LMHeadModel
+from transformers import AutoTokenizer, AutoModelForQuestionAnswering
 import torch
 
 @st.cache_resource
 def load_model():
-    tokenizer = GPT2Tokenizer.from_pretrained("robiulhasanjisan88/Bangla-QA-BERT")
-    model = GPT2LMHeadModel.from_pretrained("robiulhasanjisan88/Bangla-QA-BERT")
+    tokenizer = AutoTokenizer.from_pretrained("robiulhasanjisan88/Bangla-QA-BERT")
+    model = AutoModelForQuestionAnswering.from_pretrained("robiulhasanjisan88/Bangla-QA-BERT")
     model.eval()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
@@ -86,26 +86,21 @@ user_input = st.text_input("Your Question:", placeholder="e.g. What is an atom?"
 if user_input:
     st.session_state.chat_history.append(("user", user_input))
 
-    # Encode and generate
-    input_ids = tokenizer.encode(user_input, return_tensors="pt").to(device)
+    # Since this is a QA model, you need to define a context too
+    # For now, use a dummy context or load from database or file
+    context = "Chemistry is the branch of science that studies the composition, structure, and properties of matter."
+
+    inputs = tokenizer.encode_plus(user_input, context, return_tensors="pt").to(device)
 
     with torch.no_grad():
-        output_ids = model.generate(
-            input_ids,
-            max_length=200,
-            num_return_sequences=1,
-            pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            temperature=0.7,
-            top_p=0.95,
-            repetition_penalty=1.2,
-            do_sample=True
-        )
-    answer = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        outputs = model(**inputs)
+        start_scores = outputs.start_logits
+        end_scores = outputs.end_logits
+        start = torch.argmax(start_scores)
+        end = torch.argmax(end_scores) + 1
+        answer = tokenizer.convert_tokens_to_string(tokenizer.convert_ids_to_tokens(inputs["input_ids"][0][start:end]))
 
-    # Remove user input from answer (to only keep AI response)
-    answer = answer[len(user_input):].strip()
-    if not answer:
+    if not answer.strip():
         answer = "Sorry, I couldn't generate an answer."
 
     st.session_state.chat_history.append(("ai", answer))
@@ -116,4 +111,4 @@ for sender, msg in st.session_state.chat_history:
     st.markdown(f"<div class='{bubble_class}'>{msg}</div>", unsafe_allow_html=True)
 
 # Footer
-st.markdown("<div class='footer'>Powered by Hugging Face & GPT-2</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>Powered by Hugging Face & BERT</div>", unsafe_allow_html=True)
